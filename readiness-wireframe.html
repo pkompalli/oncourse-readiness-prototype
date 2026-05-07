@@ -462,14 +462,14 @@
       <div class="skill-bars">
         <div class="skill-row">
           <div class="skill-meta">
-            <span class="skill-label">Know it</span>
+            <span class="skill-label">Knowledge Foundation</span>
             <span class="skill-pct" id="dKnowPct"></span>
           </div>
           <div class="skill-track"><div class="skill-fill fill-know" id="dKnowBar"></div></div>
         </div>
         <div class="skill-row">
           <div class="skill-meta">
-            <span class="skill-label">Use it</span>
+            <span class="skill-label">Clinical Application</span>
             <span class="skill-pct" id="dUsePct"></span>
           </div>
           <div class="skill-track"><div class="skill-fill fill-use" id="dUseBar"></div></div>
@@ -506,41 +506,104 @@ function tagForState(state) {
 
 function nextStepText(subjectId, topicMastery) {
   const sm = RE.READINESS.subjectMastery[subjectId];
+  const subTopics = Object.values(topicMastery).filter(t => t.subject_id === subjectId);
+  const topicName = (t) => RE.TOPICS[t.topic_id]?.name || t.topic_id;
+
   switch (sm.state) {
-    case 'exam_ready':
+
+    case 'exam_ready': {
+      const developing = subTopics.filter(t => t.state === 'developing')
+        .sort((a, b) => a.use_it_score - b.use_it_score);
+      if (developing.length) {
+        const t = developing[0];
+        return { label: 'To stay Exam Ready',
+          text: `<b>${topicName(t)}</b> is your most fragile area — Clinical Application at ${pct(t.use_it_score)}. ` +
+                `Run a 5-question application drill every 2 weeks to stop decay.` };
+      }
+      const weakest = subTopics.filter(t => t.state !== 'not_started')
+        .sort((a, b) => a.use_it_score - b.use_it_score)[0];
       return { label: 'To stay Exam Ready',
-        text: 'Schedule a revision in <b>14 days</b> to prevent decay on any developing topics.' };
-    case 'developing': {
-      const weakTopics = Object.values(topicMastery)
-        .filter(t => t.subject_id === subjectId && t.state === 'needs_work')
-        .map(t => RE.TOPICS[t.topic_id]?.name || t.topic_id);
-      const focus = weakTopics.length
-        ? weakTopics.slice(0,2).join(' and ')
-        : 'application-level questions';
-      return { label: 'To reach Exam Ready',
-        text: `Practice <b>application questions</b> on ${focus} — these topics are pulling your Use it score down.` };
+        text: `Strong across the board. Revisit <b>${weakest ? topicName(weakest) : 'weakest topics'}</b> in ` +
+              `14 days — spaced repetition keeps scores above the exam threshold.` };
     }
-    case 'needs_work':
+
+    case 'developing': {
+      const needsWork = subTopics.filter(t => t.state === 'needs_work')
+        .sort((a, b) => a.use_it_score - b.use_it_score);
+      if (needsWork.length) {
+        const t = needsWork[0];
+        return { label: 'To reach Exam Ready',
+          text: `<b>${topicName(t)}</b> is the blocker — Clinical Application at ${pct(t.use_it_score)}. ` +
+                `Do 15 Bloom's L3+ questions using the question bank's application filter. ` +
+                `Flashcards alone won't move this score.` };
+      }
+      const lowestUse = subTopics.filter(t => t.state !== 'not_started')
+        .sort((a, b) => a.use_it_score - b.use_it_score)[0];
+      return { label: 'To reach Exam Ready',
+        text: `Push <b>${lowestUse ? topicName(lowestUse) : 'weaker topics'}</b> above 68% Clinical Application ` +
+              `(currently ${lowestUse ? pct(lowestUse.use_it_score) : '—'}). ` +
+              `Target 10 application questions per session.` };
+    }
+
+    case 'needs_work': {
+      const scored = subTopics.filter(t => t.state !== 'not_started')
+        .sort((a, b) => b.know_it_score - a.know_it_score);
+      if (scored.length) {
+        const best = scored[0];
+        return { label: 'To reach Developing',
+          text: `<b>${topicName(best)}</b> is your strongest base here (Knowledge Foundation ${pct(best.know_it_score)}). ` +
+                `Start with 20 recall flashcards daily until you hit 65%, ` +
+                `then move to question bank application questions.` };
+      }
       return { label: 'To reach Developing',
-        text: '<b>Start with recall questions</b> to build your knowledge base first. Aim for 65% recall accuracy before attempting application.' };
-    default:
+        text: `Pick one topic and do <b>20 recall flashcards daily</b>. ` +
+              `Hit 65% Knowledge Foundation before attempting application questions.` };
+    }
+
+    default: {
+      const first = subTopics[0];
       return { label: 'To get started',
-        text: '<b>Attempt 10 questions</b> in any topic here — even a baseline score tells you where to focus.' };
+        text: `Start with <b>${first ? topicName(first) : 'any topic'}</b> — attempt 10 questions cold. ` +
+              `Your knowledge from related subjects likely carries over more than you expect.` };
+    }
   }
 }
 
 function rezzyMessage(subjectId) {
   const sm = RE.READINESS.subjectMastery[subjectId];
   const name = RE.SUBJECTS[subjectId]?.name || subjectId;
+  const { topicMastery } = RE.READINESS;
+  const subTopics = Object.values(topicMastery)
+    .filter(t => t.subject_id === subjectId && t.state !== 'not_started');
+  const topicName = (t) => `<b>${RE.TOPICS[t.topic_id]?.name || t.topic_id}</b>`;
+
   switch (sm.state) {
-    case 'exam_ready':
-      return `${name} is solid — you're applying knowledge well. Keep weaker topics from decaying.`;
-    case 'developing':
-      return `${name}: you know the facts but struggle on application. Fix the Needs Work topics first.`;
-    case 'needs_work':
-      return `${name} needs serious attention — both recall and application are low. Build foundations before hard questions.`;
+    case 'exam_ready': {
+      const weakest = [...subTopics].sort((a, b) => a.use_it_score - b.use_it_score)[0];
+      return `<b>${name}</b> is exam-ready. ` +
+             (weakest ? `Keep ${topicName(weakest)} in rotation — it's your most likely to decay.` : `Maintain with periodic revision.`);
+    }
+    case 'developing': {
+      const blocker = subTopics.filter(t => t.state === 'needs_work')
+        .sort((a, b) => a.use_it_score - b.use_it_score)[0];
+      if (blocker) {
+        return `<b>${name}:</b> recall is solid but application is lagging. ` +
+               `Fixing ${topicName(blocker)} is your fastest path to Exam Ready.`;
+      }
+      const lowest = [...subTopics].sort((a, b) => a.use_it_score - b.use_it_score)[0];
+      return `<b>${name}:</b> good foundation — push Clinical Application above 68% in ` +
+             `${lowest ? topicName(lowest) : 'weaker topics'} to cross over.`;
+    }
+    case 'needs_work': {
+      const avgKnow = subTopics.length
+        ? subTopics.reduce((s, t) => s + t.know_it_score, 0) / subTopics.length : 0;
+      const weakest = [...subTopics].sort((a, b) => a.know_it_score - b.know_it_score)[0];
+      return `<b>${name}:</b> Knowledge Foundation is at ${pct(avgKnow)} — ` +
+             `${weakest ? `${topicName(weakest)} needs the most attention. ` : ''}` +
+             `Build recall before you try application questions.`;
+    }
     default:
-      return `${name} is untouched. Even 10 questions will show you how much you already know from other subjects.`;
+      return `<b>${name}</b> is untouched. A 10-question cold attempt takes under 10 min and reveals your baseline instantly.`;
   }
 }
 

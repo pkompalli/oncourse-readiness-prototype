@@ -393,6 +393,139 @@
         .ns-green  .ns-eyebrow { color: var(--green-700); }
         .ns-green  .ns-text b  { color: var(--green-700); }
 
+        /* Rezzy baseline chat */
+        .baseline-card {
+            display: none;
+            margin-top: 14px;
+            border: 1.5px solid var(--blue-100);
+            background: linear-gradient(180deg, #ffffff 0%, var(--blue-50) 100%);
+            border-radius: 14px;
+            padding: 13px;
+        }
+        .baseline-card.visible { display: block; }
+        .baseline-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .baseline-title {
+            font-size: 13px;
+            font-weight: 800;
+            color: var(--grey-950);
+            font-family: "SN Pro Bold", "SF Pro Rounded", sans-serif;
+        }
+        .baseline-sub {
+            font-size: 11px;
+            line-height: 1.45;
+            color: var(--grey-500);
+            margin-top: 3px;
+        }
+        .rezzy-action {
+            border: 0;
+            background: var(--blue-700);
+            color: white;
+            border-radius: 10px;
+            padding: 8px 10px;
+            font-size: 11px;
+            font-weight: 800;
+            white-space: nowrap;
+            cursor: pointer;
+            font-family: "SN Pro Bold", "SF Pro Rounded", sans-serif;
+            box-shadow: 0 3px 10px rgba(22,122,223,0.22);
+        }
+        .rezzy-action.secondary {
+            background: white;
+            color: var(--blue-700);
+            border: 1.5px solid var(--blue-100);
+            box-shadow: none;
+        }
+        .chat-log {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        .chat-line {
+            max-width: 92%;
+            border-radius: 12px;
+            padding: 9px 10px;
+            font-size: 12px;
+            line-height: 1.45;
+        }
+        .chat-line.bot {
+            align-self: flex-start;
+            background: white;
+            color: var(--grey-900);
+            border-top-left-radius: 3px;
+            box-shadow: 0 1px 5px rgba(0,0,0,0.06);
+        }
+        .chat-line.user {
+            align-self: flex-end;
+            background: var(--blue-700);
+            color: white;
+            border-top-right-radius: 3px;
+        }
+        .answer-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 7px;
+        }
+        .answer-chip {
+            border: 1.5px solid var(--blue-100);
+            background: white;
+            color: var(--grey-900);
+            border-radius: 999px;
+            padding: 7px 10px;
+            font-size: 11px;
+            line-height: 1.2;
+            font-weight: 700;
+            cursor: pointer;
+            font-family: "SN Pro Semibold", "SF Pro Rounded", sans-serif;
+        }
+        .baseline-result {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin: 10px 0;
+        }
+        .baseline-metric {
+            background: white;
+            border: 1px solid var(--blue-100);
+            border-radius: 10px;
+            padding: 10px;
+        }
+        .metric-label {
+            font-size: 9px;
+            line-height: 1.25;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--grey-400);
+            font-weight: 800;
+            font-family: "SN Pro Bold", "SF Pro Rounded", sans-serif;
+        }
+        .metric-value {
+            font-size: 20px;
+            color: var(--blue-700);
+            font-weight: 800;
+            margin-top: 4px;
+            font-family: "SN Pro Bold", "SF Pro Rounded", sans-serif;
+        }
+        .baseline-plan {
+            background: white;
+            border-radius: 12px;
+            padding: 11px;
+            border-left: 3px solid var(--green-500);
+            font-size: 12px;
+            line-height: 1.55;
+            color: var(--grey-900);
+        }
+        .baseline-plan b {
+            color: var(--green-700);
+            font-family: "SN Pro Bold", "SF Pro Rounded", sans-serif;
+        }
+
         /* Detail panel top accent by state */
         .detail-panel.state-green  { border-top: 3px solid var(--green-500); }
         .detail-panel.state-yellow { border-top: 3px solid var(--yellow-500); }
@@ -481,6 +614,7 @@
         <div class="ns-eyebrow" id="dNsLabel"></div>
         <div class="ns-text"    id="dNsText"></div>
       </div>
+      <div class="baseline-card" id="baselineCard"></div>
     </div>
 
     <div class="bottom-space"></div>
@@ -563,8 +697,8 @@ function nextStepText(subjectId, topicMastery) {
     default: {
       const first = subTopics[0];
       return { label: 'To get started',
-        text: `Start with <b>${first ? topicName(first) : 'any topic'}</b> — attempt 10 questions cold. ` +
-              `Your knowledge from related subjects likely carries over more than you expect.` };
+        text: `Start with <b>${first ? topicName(first) : 'any topic'}</b>. ` +
+              `If the subject feels too blank for a cold question set, let Rezzy baseline you first.` };
     }
   }
 }
@@ -605,6 +739,209 @@ function rezzyMessage(subjectId) {
     default:
       return `<b>${name}</b> is untouched. A 10-question cold attempt takes under 10 min and reveals your baseline instantly.`;
   }
+}
+
+const baselineSessions = {};
+
+function topicNamesForSubject(subjectId) {
+  return Object.values(RE.TOPICS)
+    .filter(t => t.subject_id === subjectId)
+    .map(t => t.name);
+}
+
+function baselineQuestions(subjectId) {
+  const subjectName = RE.SUBJECTS[subjectId]?.name || subjectId;
+  const topics = topicNamesForSubject(subjectId);
+  const firstTopic = topics[0] || 'the first topic';
+  const secondTopic = topics[1] || 'a related topic';
+
+  return [
+    {
+      id: 'prior_exposure',
+      text: `Before we start ${subjectName}, how much of this have you already seen in classes or previous prep?`,
+      options: [
+        { label: 'Almost none', know: 0.10, use: 0.05 },
+        { label: 'Some basics', know: 0.32, use: 0.16 },
+        { label: 'Reviewed recently', know: 0.58, use: 0.34 },
+      ],
+    },
+    {
+      id: 'foundation',
+      text: `If I say ${firstTopic} and ${secondTopic}, what happens?`,
+      options: [
+        { label: 'Need a primer', know: 0.14, use: 0.06 },
+        { label: 'Recognise terms', know: 0.38, use: 0.18 },
+        { label: 'Can explain aloud', know: 0.66, use: 0.34 },
+      ],
+    },
+    {
+      id: 'clinical',
+      text: `In a clinical vignette, can you pick the diagnosis or next step from clues?`,
+      options: [
+        { label: 'Mostly guessing', know: 0.18, use: 0.10 },
+        { label: 'With prompts', know: 0.42, use: 0.34 },
+        { label: 'Usually yes', know: 0.62, use: 0.58 },
+      ],
+    },
+    {
+      id: 'pace',
+      text: `For the next 7 days, what study rhythm is realistic?`,
+      options: [
+        { label: '10 min daily', know: 0.22, use: 0.12, pace: 'light' },
+        { label: '25 min blocks', know: 0.42, use: 0.30, pace: 'steady' },
+        { label: 'Timed Q sets', know: 0.56, use: 0.48, pace: 'aggressive' },
+      ],
+    },
+  ];
+}
+
+function baselineSessionFor(subjectId) {
+  if (!baselineSessions[subjectId]) {
+    baselineSessions[subjectId] = { subjectId, step: 0, answers: [], complete: false };
+  }
+  return baselineSessions[subjectId];
+}
+
+function readinessPlanForBaseline(subjectId, know, use, pace) {
+  const topics = topicNamesForSubject(subjectId);
+  const firstTopic = topics[0] || 'one core topic';
+  const secondTopic = topics[1] || 'one clinical topic';
+  const dailyTarget = pace === 'aggressive' ? '2 timed mini-sets' : pace === 'steady' ? '1 focused block' : '10 focused minutes';
+
+  if (know < 0.35) {
+    return `<b>Move from Not Started to Needs Work:</b> spend 2 days on ${firstTopic} basics, then do ${dailyTarget} with recall flashcards. Your first milestone is 65% Knowledge Foundation before heavier clinical questions.`;
+  }
+  if (use < 0.35) {
+    return `<b>Move from Needs Work to Developing:</b> keep ${firstTopic} recall warm, but add 10 low-stakes application questions from ${secondTopic}. Rezzy would watch for Clinical Application crossing 35%.`;
+  }
+  return `<b>Move from Developing toward Exam Ready:</b> start mixed vignettes now. Do ${dailyTarget}, review every miss by concept, and aim for 68% Clinical Application plus 10+ application questions.`;
+}
+
+function renderBaselineIntro(subjectId) {
+  const subjectName = RE.SUBJECTS[subjectId]?.name || subjectId;
+  const card = document.getElementById('baselineCard');
+  card.className = 'baseline-card visible';
+  card.innerHTML = `
+    <div class="baseline-head">
+      <div>
+        <div class="baseline-title">Baseline with Rezzy</div>
+        <div class="baseline-sub">A quick chat to estimate Knowledge Foundation and Clinical Application before the first study session.</div>
+      </div>
+      <button class="rezzy-action" id="startBaselineBtn">Start</button>
+    </div>
+    <div class="chat-log">
+      <div class="chat-line bot">Want me to baseline ${subjectName}? I will ask 4 quick questions and suggest the next move through the readiness hierarchy.</div>
+    </div>`;
+
+  document.getElementById('startBaselineBtn').addEventListener('click', () => {
+    baselineSessions[subjectId] = { subjectId, step: 0, answers: [], complete: false };
+    renderBaselineChat(subjectId);
+  });
+}
+
+function renderBaselineChat(subjectId) {
+  const session = baselineSessionFor(subjectId);
+  const questions = baselineQuestions(subjectId);
+  const card = document.getElementById('baselineCard');
+  const asked = questions.slice(0, session.step);
+  const current = questions[session.step];
+
+  const transcript = [];
+  asked.forEach((question, index) => {
+    transcript.push(`<div class="chat-line bot">${question.text}</div>`);
+    transcript.push(`<div class="chat-line user">${session.answers[index].label}</div>`);
+  });
+
+  if (session.complete) {
+    renderBaselineResult(subjectId);
+    return;
+  }
+
+  transcript.push(`<div class="chat-line bot">${current.text}</div>`);
+  card.className = 'baseline-card visible';
+  card.innerHTML = `
+    <div class="baseline-head">
+      <div>
+        <div class="baseline-title">Rezzy baseline</div>
+        <div class="baseline-sub">Question ${session.step + 1} of ${questions.length}</div>
+      </div>
+      <button class="rezzy-action secondary" id="resetBaselineBtn">Reset</button>
+    </div>
+    <div class="chat-log">${transcript.join('')}</div>
+    <div class="answer-chips">
+      ${current.options.map((option, index) => `<button class="answer-chip" data-answer="${index}">${option.label}</button>`).join('')}
+    </div>`;
+
+  document.getElementById('resetBaselineBtn').addEventListener('click', () => {
+    baselineSessions[subjectId] = { subjectId, step: 0, answers: [], complete: false };
+    renderBaselineIntro(subjectId);
+  });
+
+  card.querySelectorAll('.answer-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      session.answers.push(current.options[Number(chip.dataset.answer)]);
+      session.step++;
+      session.complete = session.step >= questions.length;
+      renderBaselineChat(subjectId);
+    });
+  });
+}
+
+function renderBaselineResult(subjectId) {
+  const session = baselineSessionFor(subjectId);
+  const subjectName = RE.SUBJECTS[subjectId]?.name || subjectId;
+  const know = session.answers.reduce((sum, answer) => sum + answer.know, 0) / session.answers.length;
+  const use = session.answers.reduce((sum, answer) => sum + answer.use, 0) / session.answers.length;
+  const pace = session.answers.find(answer => answer.pace)?.pace || 'steady';
+  const card = document.getElementById('baselineCard');
+  const questions = baselineQuestions(subjectId);
+  const transcript = [];
+
+  questions.forEach((question, index) => {
+    transcript.push(`<div class="chat-line bot">${question.text}</div>`);
+    transcript.push(`<div class="chat-line user">${session.answers[index].label}</div>`);
+  });
+
+  document.getElementById('dKnowPct').textContent = pct(know);
+  document.getElementById('dUsePct').textContent = pct(use);
+  document.getElementById('dKnowBar').style.width = pct(know);
+  document.getElementById('dUseBar').style.width = pct(use);
+  document.getElementById('rezzyMsg').innerHTML =
+    `<b>${subjectName} baseline:</b> Knowledge Foundation ${pct(know)}, Clinical Application ${pct(use)}. ` +
+    `This is enough to choose the first step without pretending the subject is done.`;
+
+  card.className = 'baseline-card visible';
+  card.innerHTML = `
+    <div class="baseline-head">
+      <div>
+        <div class="baseline-title">Baseline complete</div>
+        <div class="baseline-sub">Prototype estimate based on Rezzy's quick chat.</div>
+      </div>
+      <button class="rezzy-action secondary" id="rerunBaselineBtn">Redo</button>
+    </div>
+    <div class="chat-log">${transcript.join('')}</div>
+    <div class="baseline-result">
+      <div class="baseline-metric">
+        <div class="metric-label">Knowledge Foundation</div>
+        <div class="metric-value">${pct(know)}</div>
+      </div>
+      <div class="baseline-metric">
+        <div class="metric-label">Clinical Application</div>
+        <div class="metric-value">${pct(use)}</div>
+      </div>
+    </div>
+    <div class="baseline-plan">${readinessPlanForBaseline(subjectId, know, use, pace)}</div>`;
+
+  document.getElementById('rerunBaselineBtn').addEventListener('click', () => {
+    baselineSessions[subjectId] = { subjectId, step: 0, answers: [], complete: false };
+    renderBaselineChat(subjectId);
+  });
+}
+
+function hideBaseline() {
+  const card = document.getElementById('baselineCard');
+  card.className = 'baseline-card';
+  card.innerHTML = '';
 }
 
 // ── Build subject grid from engine data ─────────────────────────────────────
@@ -713,6 +1050,16 @@ function showSubject(subjectId, pill) {
 
   // Rezzy
   document.getElementById('rezzyMsg').innerHTML = rezzyMessage(subjectId);
+  if (sm.state === 'not_started') {
+    const existingSession = baselineSessions[subjectId];
+    if (existingSession?.complete) {
+      renderBaselineResult(subjectId);
+    } else {
+      renderBaselineIntro(subjectId);
+    }
+  } else {
+    hideBaseline();
+  }
 
   const panel = document.getElementById('detailPanel');
   panel.className = `detail-panel visible ${cfg.panelClass}`;
